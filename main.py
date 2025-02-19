@@ -1,87 +1,81 @@
-from fastapi import FastAPI, Query
-from typing import List, Dict
-import numpy as np
+from fastapi import FastAPI, Query, HTTPException
+import requests
+from typing import List, Dict, Optional
+import os
+from dotenv import load_dotenv
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.layers import Embedding, Dense, Flatten
+import numpy as np
+import pandas as pd
 
-app = FastAPI(title="Video Recommendation Engine")
+# Load environment variables
+load_dotenv()
+FLIC_TOKEN = os.getenv("FLIC_TOKEN")
+API_BASE_URL = "https://api.socialverseapp.com"
 
-# Mock Video Dataset
-video_data = [
-    {"id": 101, "title": "Motivational Talk", "category_id": 1, "views": 5000, "likes": 120},
-    {"id": 102, "title": "Life Lessons", "category_id": 2, "views": 3000, "likes": 80},
-    {"id": 103, "title": "Tech Innovations", "category_id": 3, "views": 4000, "likes": 100},
-    {"id": 104, "title": "Fitness Guide", "category_id": 1, "views": 7000, "likes": 200},
-    {"id": 105, "title": "Self-Improvement", "category_id": 2, "views": 2500, "likes": 90}
-]
+app = FastAPI()
 
-# Mock user engagement data (user_id, video_id, engagement_score) 
-user_engagement = [
-    {"user_id": 1, "video_id": 101, "engagement_score": 4.5},
-    {"user_id": 1, "video_id": 102, "engagement_score": 4.0},
-    {"user_id": 2, "video_id": 103, "engagement_score": 3.5},
-    {"user_id": 2, "video_id": 104, "engagement_score": 5.0},
-    {"user_id": 3, "video_id": 105, "engagement_score": 4.8}
-]
-
-# Prepare Training Data (User-Video Interaction Matrix)
-num_users = 10  # Simulated 10 users
-num_videos = len(video_data)
-user_video_matrix = np.random.randint(0, 2, size=(num_users, num_videos))  # Simulated engagement data
-
-# Define Deep Learning Model for Recommendations
-class VideoRecommendationModel(keras.Model):
-    def __init__(self, num_videos):
-        super().__init__()
-        self.embedding = Embedding(input_dim=num_videos, output_dim=16)
-        self.dense1 = Dense(32, activation="relu")
-        self.dense2 = Dense(16, activation="relu")
-        self.output_layer = Dense(1, activation="sigmoid")
-
-    def call(self, inputs):
-        x = self.embedding(inputs)
-        x = Flatten()(x)
-        x = self.dense1(x)
-        x = self.dense2(x)
-        return self.output_layer(x)
-
-# Initialize & Train the Model
-model = VideoRecommendationModel(num_videos)
-model.compile(optimizer="adam", loss="binary_crossentropy")
-
-# Correcting the Shape of Target Labels
-y_train = np.random.randint(0, 2, size=(num_users, 1))
-
-# Train the model 
-model.fit(user_video_matrix, y_train, epochs=10, verbose=1)
-
-# DNN-Based Video Recommendation Function
-def recommend_videos(user_id: int) -> List[Dict]:
-    video_ids = np.array([video["id"] for video in video_data])
-    predicted_scores = model.predict(video_ids)
-
-    # Sort videos by predicted scores
-    recommended_videos = sorted(zip(video_data, predicted_scores.flatten()), key=lambda x: x[1], reverse=True)
-    return [{"id": v[0]["id"], "title": v[0]["title"], "predicted_score": round(v[1], 2)} for v in recommended_videos[:3]]
-
-# Cold Start Handling (If User Has No Engagement Data)
-def cold_start_recommendations() -> List[Dict]:
-    return sorted(video_data, key=lambda x: x["likes"], reverse=True)[:3]  # Top 3 most liked videos
-
-# API: Get DNN-Based Personalized Recommendations
-@app.get("/feed", summary="Get personalized recommendations")
-def get_feed(username: str = Query(..., description="Username for recommendations")):
-    user_id = hash(username) % num_users  # Generate a fake user ID for testing
-    
-    if user_id in [eng["user_id"] for eng in user_engagement]:
-        recommendations = recommend_videos(user_id)
+# Function to fetch data from API with headers
+def fetch_data(endpoint: str) -> List[Dict]:
+    headers = {"Flic-Token": FLIC_TOKEN}
+    response = requests.get(f"{API_BASE_URL}{endpoint}", headers=headers)
+    if response.status_code == 200:
+        return response.json().get("posts", [])
     else:
-        recommendations = cold_start_recommendations()
+        raise HTTPException(status_code=response.status_code, detail=f"API request failed: {response.text}")
 
-    return {"username": username, "recommendations": recommendations}
+# Fetch various types of engagement data
+def get_viewed_posts():
+    return fetch_data("/posts/view?page=1&page_size=1000")
 
-# API: Get All Videos (Mocked Data)
-@app.get("/posts/all", summary="Get all videos")
+def get_liked_posts():
+    return fetch_data("/posts/like?page=1&page_size=1000")
+
+def get_inspired_posts():
+    return fetch_data("/posts/inspire?page=1&page_size=1000")
+
+def get_rated_posts():
+    return fetch_data("/posts/rating?page=1&page_size=1000")
+
 def get_all_posts():
-    return {"status": "success", "message": "Mocked post data", "posts": video_data}
+    return fetch_data("/posts/summary/get?page=1&page_size=1000")
+
+# Train a simple deep learning model for recommendations
+def train_model():
+    num_users = 100
+    num_videos = 500
+    user_video_matrix = np.random.rand(num_users, num_videos)
+    model = tf.keras.Sequential([
+        tf.keras.layers.Dense(128, activation='relu', input_shape=(num_videos,)),
+        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dense(num_videos, activation='sigmoid')
+    ])
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    model.fit(user_video_matrix, np.random.randint(0, 2, size=(num_users, num_videos)), epochs=10, verbose=1)
+    return model
+
+model = train_model()
+
+# API: Get personalized video feed
+@app.get("/feed")
+def get_feed(
+    username: str = Query(..., description="Username for recommendations"),
+    category_id: Optional[int] = Query(None, description="Filter by category ID (optional)")
+):
+    viewed_posts = get_viewed_posts()
+    liked_posts = get_liked_posts()
+    inspired_posts = get_inspired_posts()
+    rated_posts = get_rated_posts()
+    
+    all_posts = viewed_posts + liked_posts + inspired_posts + rated_posts
+    unique_posts = {post["id"]: post for post in all_posts}.values()
+    
+    if category_id:
+        filtered_posts = [post for post in unique_posts if post.get("category", {}).get("id") == category_id]
+        return {"username": username, "recommendations": filtered_posts}
+    
+    return {"username": username, "recommendations": list(unique_posts)}
+
+# API: Get all video posts
+@app.get("/posts/all")
+def get_all_video_posts():
+    return {"status": "success", "message": "Fetched all posts", "posts": get_all_posts()}
