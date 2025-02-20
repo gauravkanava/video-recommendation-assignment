@@ -118,4 +118,5 @@ async def get_all_videos():
 
 @app.get("/cold_start")
 async def get_cold_start_recommendations(user_mood: str):
-    recommendations
+    recommendations = cold_start_recommendations(user_mood)
+    return recommendations.to_dict(orient='records')
