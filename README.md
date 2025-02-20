@@ -4,26 +4,26 @@ Hey folks! This is my Video Recommendation Engine—a project I built to suggest
 
 ## Project Overview
 
-I wanted to create a system that:
-- Dishes out video recs based on what you’ve watched, liked, or rated.
-- Helps newbies (cold-start users) by showing all available posts—working on something snazzier like mood-based picks!
-- Uses a deep neural network to crunch data (just a placeholder with random stuff for now).
-- Ties into the Socialverse API for real-world engagement data.
-- Keeps things smooth with pagination baked in.
+The objective of this project is to develop a recommendation system that:
+- Provides video recommendations based on users' viewing history, likes, and ratings.
+- Assists new users (cold-start users) by displaying all available posts and exploring innovative features like mood-based selections.
+- Utilizes a deep neural network to analyze data (currently implemented with placeholder data).
+- Integrates with the Socialverse API to access real-world engagement metrics.
+- Ensures a seamless user experience by incorporating pagination.
 
-It’s not perfect yet, but it’s a solid start!
+While the system is still in development, it serves as a promising foundation for future enhancements.
 
 ## Technology Stack
 
 - **Backend**: FastAPI (love how fast it is!)
-- **Machine Learning**: TensorFlow (with a dash of NumPy and Pandas)
+- **Machine Learning**: TensorFlow (supplemented with NumPy and Pandas for data manipulation and analysis)
 - **API Testing**: Postman
 - **Migrations**: Alembic (setting up for a database later)
 
 ## Prerequisites
 
-- Python 3.9+ (works with 3.8 too, but 3.9’s my pick)
-- A virtual environment (keeps the mess away)
+- Python: Version 3.9 or higher (compatible with 3.8, but 3.9 is preferred)
+- Virtual Environment: To maintain an organized development environment and prevent dependency conflicts
 
 ## How to Fire It Up
 
