@@ -1,34 +1,39 @@
 # Video Recommendation Engine
 
-A sophisticated recommendation system that suggests personalized video content based on user preferences and engagement patterns using deep neural networks. Ref: to see what kind of motivational content you have to recommend, take reference from our Empowerverse App [ANDROID](https://play.google.com/store/apps/details?id=com.empowerverse.app) || [iOS](https://apps.apple.com/us/app/empowerverse/id6449552284).
+Hey folks! This is my Video Recommendation Engine—a project I built to suggest personalized videos, drawing inspiration from the motivational vibes of the Empowerverse app ([Android](https://play.google.com/store/apps/details?id=com.empowerverse.app) | [iOS](https://apps.apple.com/us/app/empowerverse/id6449552284)). It’s powered by FastAPI and a neural network (mocked for now), pulling data from the Socialverse API.
 
-## 🎯 Project Overview
+## Project Overview
 
-This project implements a video recommendation algorithm that:
+I wanted to create a system that:
+- Dishes out video recs based on what you’ve watched, liked, or rated.
+- Helps newbies (cold-start users) by showing all available posts—working on something snazzier like mood-based picks!
+- Uses a deep neural network to crunch data (just a placeholder with random stuff for now).
+- Ties into the Socialverse API for real-world engagement data.
+- Keeps things smooth with pagination baked in.
 
-- Delivers personalized content recommendations
-- Handles cold start problems using mood-based recommendations
-- Utilizes deep neural networks for content analysis
-- Integrates with external APIs for data collection
-- Implements efficient data caching and pagination
+It’s not perfect yet, but it’s a solid start!
 
-## 🛠️ Technology Stack
+## Technology Stack
 
-- **Backend Framework**: FastAPI
-- **Documentation**: Swagger/OpenAPI
+- **Backend**: FastAPI (love how fast it is!)
+- **Machine Learning**: TensorFlow (with a dash of NumPy and Pandas)
+- **API Testing**: Postman
+- **Migrations**: Alembic (setting up for a database later)
 
-## 📋 Prerequisites
+## Prerequisites
 
-- Virtual environment (recommended)
+- Python 3.9+ (works with 3.8 too, but 3.9’s my pick)
+- A virtual environment (keeps the mess away)
 
-## 🚀 Getting Started
+## How to Fire It Up
+
+Here’s my step-by-step:
 
 1. **Clone the Repository**
-
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/gauravkanava/video-recommendation-engine
    cd video-recommendation-engine
-   ```
+
 2. **Set Up Virtual Environment**
 
    ```bash
@@ -38,14 +43,14 @@ This project implements a video recommendation algorithm that:
 3. **Install Dependencies**
 
    ```bash
-   pip install -r requirements.txt
+   pip install fastapi uvicorn requests python-dotenv tensorflow numpy pandas alembic sqlalchemy
    ```
 4. **Configure Environment Variables**
    Create a `.env` file in the root directory:
 
    ```env
 
-   FLIC_TOKEN=your_flic_token
+   FLIC_TOKEN=flic_11d3da28e403d182c36a3530453e290add87d0b4a40ee50f17611f180d47956f
    API_BASE_URL=https://api.socialverseapp.com
    ```
 5. **Run Database Migrations**
@@ -53,15 +58,15 @@ This project implements a video recommendation algorithm that:
    ```bash
    alembic upgrade head
    ```
-6. **Start the Server**
+6. **Start the Engine**
 
    ```bash
    uvicorn app.main:app --reload
    ```
 
-## 📊 API Endpoints
+## API Endpoints
 
-### Main Recommendation Endpoints
+### Main Endpoints
 
 1. **Get Personalized Feed**
 
@@ -76,7 +81,14 @@ This project implements a video recommendation algorithm that:
    GET /feed?username={username}&category_id={category_id}
    ```
 
-   Returns category-specific video recommendations for a user.
+   Narrows it down to a specific category—say, motivational talks.
+3. **All Videos**
+
+   ```
+   GET /posts/all
+   ```
+
+   Grabs everything from the Socialverse API’s summary endpoint.
 
 ### Data Collection Endpoints (Internal Use)
 
@@ -117,9 +129,8 @@ The system uses the following APIs for data collection:
 
 ### Authorization
 
-For autherization pass `Flic-Token` as header in the API request:
+Every API call needs this header:
 
-Header:
 
 ```json
 "Flic-Token": "flic_11d3da28e403d182c36a3530453e290add87d0b4a40ee50f17611f180d47956f"
@@ -127,7 +138,7 @@ Header:
 
 **Note**: All external API calls require the Flic-Token header:
 
-## 🧮 Algorithm Implementation
+## Algorithm Implementation
 
 The recommendation engine uses a Deep Neural Network (DNN) architecture with the following components:
 
