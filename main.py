@@ -1,81 +1,121 @@
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, HTTPException
 import requests
-from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
-import tensorflow as tf
-import numpy as np
 import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Flatten, Dense, Dropout, concatenate
 
 # Load environment variables
 load_dotenv()
-FLIC_TOKEN = os.getenv("FLIC_TOKEN")
-API_BASE_URL = "https://api.socialverseapp.com"
 
+# Initialize FastAPI app
 app = FastAPI()
 
-# Function to fetch data from API with headers
-def fetch_data(endpoint: str) -> List[Dict]:
-    headers = {"Flic-Token": FLIC_TOKEN}
-    response = requests.get(f"{API_BASE_URL}{endpoint}", headers=headers)
-    if response.status_code == 200:
-        return response.json().get("posts", [])
-    else:
-        raise HTTPException(status_code=response.status_code, detail=f"API request failed: {response.text}")
+# Environment variables
+FLIC_TOKEN = os.getenv("FLIC_TOKEN")
+API_BASE_URL = os.getenv("API_BASE_URL")
 
-# Fetch various types of engagement data
-def get_viewed_posts():
-    return fetch_data("/posts/view?page=1&page_size=1000")
+# Authorization header
+headers = {
+    "Flic-Token": FLIC_TOKEN
+}
 
-def get_liked_posts():
-    return fetch_data("/posts/like?page=1&page_size=1000")
+# Data Preprocessing
+data = pd.read_csv('your_data.csv')
+categorical_cols = ['category', 'mood']
+numerical_cols = ['view_count', 'like_count', 'rating']
 
-def get_inspired_posts():
-    return fetch_data("/posts/inspire?page=1&page_size=1000")
+numerical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='mean')),
+    ('scaler', StandardScaler())
+])
 
-def get_rated_posts():
-    return fetch_data("/posts/rating?page=1&page_size=1000")
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
 
-def get_all_posts():
-    return fetch_data("/posts/summary/get?page=1&page_size=1000")
-
-# Train a simple deep learning model for recommendations
-def train_model():
-    num_users = 100
-    num_videos = 500
-    user_video_matrix = np.random.rand(num_users, num_videos)
-    model = tf.keras.Sequential([
-        tf.keras.layers.Dense(128, activation='relu', input_shape=(num_videos,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(num_videos, activation='sigmoid')
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_cols),
+        ('cat', categorical_transformer, categorical_cols)
     ])
-    model.compile(optimizer='adam', loss='binary_crossentropy')
-    model.fit(user_video_matrix, np.random.randint(0, 2, size=(num_users, num_videos)), epochs=10, verbose=1)
-    return model
 
-model = train_model()
+X = preprocessor.fit_transform(data)
 
-# API: Get personalized video feed
+# Model Architecture
+num_numerical_features = X.shape[1] - len(categorical_cols)
+embedding_input_dims = [data[col].nunique() for col in categorical_cols]
+embedding_output_dims = [5 for _ in categorical_cols]
+
+numerical_input = Input(shape=(num_numerical_features,), name='numerical_input')
+categorical_inputs = []
+categorical_embeddings = []
+for i, col in enumerate(categorical_cols):
+    categorical_input = Input(shape=(1,), name=f'{col}_input')
+    embedding = Embedding(input_dim=embedding_input_dims[i], output_dim=embedding_output_dims[i], input_length=1)(categorical_input)
+    embedding = Flatten()(embedding)
+    categorical_inputs.append(categorical_input)
+    categorical_embeddings.append(embedding)
+
+all_features = concatenate([numerical_input] + categorical_embeddings)
+x = Dense(128, activation='relu')(all_features)
+x = Dropout(0.5)(x)
+x = Dense(64, activation='relu')(x)
+x = Dropout(0.5)(x)
+output = Dense(1, activation='sigmoid', name='output')(x)
+
+model = Model(inputs=[numerical_input] + categorical_inputs, outputs=output)
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Cold Start Handling
+def cold_start_recommendations(user_mood):
+    mood_based_recommendations = data[data['mood'] == user_mood].head(10)
+    if mood_based_recommendations.empty:
+        content_based_recommendations = data[data['category'] == 'default_category'].head(10)
+    else:
+        content_based_recommendations = mood_based_recommendations
+    if content_based_recommendations.empty:
+        popularity_based_recommendations = data.sort_values(by='view_count', ascending=False).head(10)
+    else:
+        popularity_based_recommendations = content_based_recommendations
+    return popularity_based_recommendations
+
+# Main endpoints
 @app.get("/feed")
-def get_feed(
-    username: str = Query(..., description="Username for recommendations"),
-    category_id: Optional[int] = Query(None, description="Filter by category ID (optional)")
-):
-    viewed_posts = get_viewed_posts()
-    liked_posts = get_liked_posts()
-    inspired_posts = get_inspired_posts()
-    rated_posts = get_rated_posts()
-    
-    all_posts = viewed_posts + liked_posts + inspired_posts + rated_posts
-    unique_posts = {post["id"]: post for post in all_posts}.values()
-    
-    if category_id:
-        filtered_posts = [post for post in unique_posts if post.get("category", {}).get("id") == category_id]
-        return {"username": username, "recommendations": filtered_posts}
-    
-    return {"username": username, "recommendations": list(unique_posts)}
+async def get_personalized_feed(username: str):
+    try:
+        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers, params={"username": username})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# API: Get all video posts
+@app.get("/feed/category")
+async def get_category_based_feed(username: str, category_id: int):
+    try:
+        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers, params={"username": username, "category_id": category_id})
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/posts/all")
-def get_all_video_posts():
-    return {"status": "success", "message": "Fetched all posts", "posts": get_all_posts()}
+async def get_all_videos():
+    try:
+        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cold_start")
+async def get_cold_start_recommendations(user_mood: str):
+    recommendations
