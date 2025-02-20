@@ -1,103 +1,90 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Query, HTTPException
 import requests
+from typing import List, Dict, Optional
+import os
+from dotenv import load_dotenv
+import tensorflow as tf
+import numpy as np
+import pandas as pd
+
+# Load environment variables
+load_dotenv()
+FLIC_TOKEN = os.getenv("FLIC_TOKEN")
+API_BASE_URL = "https://api.socialverseapp.com"
 
 app = FastAPI()
 
-# Constants
-BASE_URL = "https://api.socialverseapp.com/posts"
-HEADERS = {"Authorization": "Bearer YOUR_API_KEY_HERE"}  # Add necessary headers if required
-
-@app.get("/feed")
-def get_personalized_feed():
-    """Fetches a personalized feed."""
-    response = requests.get(f"{BASE_URL}/feed", headers=HEADERS)
+# Function to fetch data from API with headers
+def fetch_data(endpoint: str) -> List[Dict]:
+    headers = {"Flic-Token": FLIC_TOKEN}
+    response = requests.get(f"{API_BASE_URL}{endpoint}", headers=headers)
     if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
+        return response.json().get("posts", [])
+    else:
+        raise HTTPException(status_code=response.status_code, detail=f"API request failed: {response.text}")
 
-@app.get("/posts/all")
-def get_all_posts():
-    """Fetches all posts."""
-    response = requests.get(f"{BASE_URL}/summary/get?page=1&page_size=1000", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
-
-@app.get("/users/all")
-def get_all_users():
-    """Fetches all users."""
-    response = requests.get("https://api.socialverseapp.com/users/get_all?page=1&page_size=1000", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
-
-@app.get("/posts/view")
+# Fetch various types of engagement data
+@app.get("/viewed-posts")
 def get_viewed_posts():
-    """Fetches all viewed posts."""
-    response = requests.get(f"{BASE_URL}/view?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
+    return fetch_data("/posts/view?page=1&page_size=1000")
 
-@app.get("/posts/like")
+@app.get("/liked-posts")
 def get_liked_posts():
-    """Fetches all liked posts."""
-    response = requests.get(f"{BASE_URL}/like?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
+    return fetch_data("/posts/like?page=1&page_size=1000")
 
-@app.get("/posts/inspire")
+@app.get("/inspired-posts")
 def get_inspired_posts():
-    """Fetches all inspired posts."""
-    response = requests.get(f"{BASE_URL}/inspire?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
+    return fetch_data("/posts/inspire?page=1&page_size=1000")
 
-@app.get("/posts/rating")
+@app.get("/rated-posts")
 def get_rated_posts():
-    """Fetches all rated posts."""
-    response = requests.get(f"{BASE_URL}/rating?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
-    raise HTTPException(status_code=response.status_code, detail=response.text)
+    return fetch_data("/posts/rating?page=1&page_size=1000")
 
-# Data Preprocessing Functions
-def normalize_data(data):
-    """Applies normalization techniques to numerical data."""
-    return (data - min(data)) / (max(data) - min(data)) if max(data) != min(data) else data
+@app.get("/all-users")
+def get_all_users():
+    return fetch_data("/users/get_all?page=1&page_size=1000")
 
-def encode_categorical_data(data):
-    """Encodes categorical data using one-hot encoding or label encoding."""
-    return {category: idx for idx, category in enumerate(set(data))}
+@app.get("/all-posts")
+def get_all_posts():
+    return fetch_data("/posts/summary/get?page=1&page_size=1000")
 
-def handle_missing_values(data):
-    """Handles missing values by filling with mean/median/mode."""
-    return [x if x is not None else 0 for x in data]  # Example: filling missing values with zero
-
-# Model Architecture (Conceptual Example)
-def build_model():
-    """Defines a simple recommendation model with embeddings."""
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import Embedding, Dense, Dropout, Flatten
-    
-    model = Sequential([
-        Embedding(input_dim=1000, output_dim=64, input_length=10),
-        Flatten(),
-        Dense(128, activation='relu'),
-        Dropout(0.5),
-        Dense(64, activation='relu'),
-        Dense(1, activation='sigmoid')
+# Train a simple deep learning model for recommendations
+def train_model():
+    num_users = 100
+    num_videos = 500
+    user_video_matrix = np.random.rand(num_users, num_videos)
+    model = tf.keras.Sequential([
+        tf.keras.layers.Dense(128, activation='relu', input_shape=(num_videos,)),
+        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dense(num_videos, activation='sigmoid')
     ])
-    
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    model.fit(user_video_matrix, np.random.randint(0, 2, size=(num_users, num_videos)), epochs=10, verbose=1)
     return model
 
-# Cold Start Handling
-def cold_start_recommendation(user_id):
-    """Handles recommendations for new users."""
-    if user_id not in known_users:
-        return {"recommendations": ["Trending", "Mood-Based", "Popular Posts"]}
-    return {"recommendations": ["Content-Based Filtering"]}
+model = train_model()
+
+# API: Get personalized video feed
+@app.get("/feed")
+def get_feed(
+    username: str = Query(..., description="Username for recommendations"),
+    category_id: Optional[int] = Query(None, description="Filter by category ID (optional)")
+):
+    viewed_posts = get_viewed_posts()
+    liked_posts = get_liked_posts()
+    inspired_posts = get_inspired_posts()
+    rated_posts = get_rated_posts()
+    
+    all_posts = viewed_posts + liked_posts + inspired_posts + rated_posts
+    unique_posts = {post["id"]: post for post in all_posts}.values()
+    
+    if category_id:
+        filtered_posts = [post for post in unique_posts if post.get("category", {}).get("id") == category_id]
+        return {"username": username, "recommendations": filtered_posts}
+    
+    return {"username": username, "recommendations": list(unique_posts)}
+
+# API: Get all video posts
+@app.get("/posts/all")
+def get_all_video_posts():
+    return {"status": "success", "message": "Fetched all posts", "posts": get_all_posts()}
