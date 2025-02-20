@@ -1,122 +1,103 @@
 from fastapi import FastAPI, HTTPException
 import requests
-import os
-from dotenv import load_dotenv
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Flatten, Dense, Dropout, concatenate
 
-# Load environment variables
-load_dotenv()
-
-# Initialize FastAPI app
 app = FastAPI()
 
-# Environment variables
-FLIC_TOKEN = os.getenv("FLIC_TOKEN")
-API_BASE_URL = os.getenv("API_BASE_URL")
+# Constants
+BASE_URL = "https://api.socialverseapp.com/posts"
+HEADERS = {"Authorization": "Bearer YOUR_API_KEY_HERE"}  # Add necessary headers if required
 
-# Authorization header
-headers = {
-    "Flic-Token": FLIC_TOKEN
-}
-
-# Data Preprocessing
-data = pd.read_csv('your_data.csv')
-categorical_cols = ['category', 'mood']
-numerical_cols = ['view_count', 'like_count', 'rating']
-
-numerical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='mean')),
-    ('scaler', StandardScaler())
-])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='most_frequent')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))
-])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numerical_transformer, numerical_cols),
-        ('cat', categorical_transformer, categorical_cols)
-    ])
-
-X = preprocessor.fit_transform(data)
-
-# Model Architecture
-num_numerical_features = X.shape[1] - len(categorical_cols)
-embedding_input_dims = [data[col].nunique() for col in categorical_cols]
-embedding_output_dims = [5 for _ in categorical_cols]
-
-numerical_input = Input(shape=(num_numerical_features,), name='numerical_input')
-categorical_inputs = []
-categorical_embeddings = []
-for i, col in enumerate(categorical_cols):
-    categorical_input = Input(shape=(1,), name=f'{col}_input')
-    embedding = Embedding(input_dim=embedding_input_dims[i], output_dim=embedding_output_dims[i], input_length=1)(categorical_input)
-    embedding = Flatten()(embedding)
-    categorical_inputs.append(categorical_input)
-    categorical_embeddings.append(embedding)
-
-all_features = concatenate([numerical_input] + categorical_embeddings)
-x = Dense(128, activation='relu')(all_features)
-x = Dropout(0.5)(x)
-x = Dense(64, activation='relu')(x)
-x = Dropout(0.5)(x)
-output = Dense(1, activation='sigmoid', name='output')(x)
-
-model = Model(inputs=[numerical_input] + categorical_inputs, outputs=output)
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-# Cold Start Handling
-def cold_start_recommendations(user_mood):
-    mood_based_recommendations = data[data['mood'] == user_mood].head(10)
-    if mood_based_recommendations.empty:
-        content_based_recommendations = data[data['category'] == 'default_category'].head(10)
-    else:
-        content_based_recommendations = mood_based_recommendations
-    if content_based_recommendations.empty:
-        popularity_based_recommendations = data.sort_values(by='view_count', ascending=False).head(10)
-    else:
-        popularity_based_recommendations = content_based_recommendations
-    return popularity_based_recommendations
-
-# Main endpoints
 @app.get("/feed")
-async def get_personalized_feed(username: str):
-    try:
-        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers, params={"username": username})
-        response.raise_for_status()
+def get_personalized_feed():
+    """Fetches a personalized feed."""
+    response = requests.get(f"{BASE_URL}/feed", headers=HEADERS)
+    if response.status_code == 200:
         return response.json()
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/feed/category")
-async def get_category_based_feed(username: str, category_id: int):
-    try:
-        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers, params={"username": username, "category_id": category_id})
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=response.status_code, detail=response.text)
 
 @app.get("/posts/all")
-async def get_all_videos():
-    try:
-        response = requests.get(f"{API_BASE_URL}/posts/summary/get", headers=headers)
-        response.raise_for_status()
+def get_all_posts():
+    """Fetches all posts."""
+    response = requests.get(f"{BASE_URL}/summary/get?page=1&page_size=1000", headers=HEADERS)
+    if response.status_code == 200:
         return response.json()
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=response.status_code, detail=response.text)
 
-@app.get("/cold_start")
-async def get_cold_start_recommendations(user_mood: str):
-    recommendations = cold_start_recommendations(user_mood)
-    return recommendations.to_dict(orient='records')
+@app.get("/users/all")
+def get_all_users():
+    """Fetches all users."""
+    response = requests.get("https://api.socialverseapp.com/users/get_all?page=1&page_size=1000", headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+@app.get("/posts/view")
+def get_viewed_posts():
+    """Fetches all viewed posts."""
+    response = requests.get(f"{BASE_URL}/view?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+@app.get("/posts/like")
+def get_liked_posts():
+    """Fetches all liked posts."""
+    response = requests.get(f"{BASE_URL}/like?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+@app.get("/posts/inspire")
+def get_inspired_posts():
+    """Fetches all inspired posts."""
+    response = requests.get(f"{BASE_URL}/inspire?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+@app.get("/posts/rating")
+def get_rated_posts():
+    """Fetches all rated posts."""
+    response = requests.get(f"{BASE_URL}/rating?page=1&page_size=1000&resonance_algorithm=resonance_algorithm_cjsvervb7dbhss8bdrj89s44jfjdbsjd0xnjkbvuire8zcjwerui3njfbvsujc5if", headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+# Data Preprocessing Functions
+def normalize_data(data):
+    """Applies normalization techniques to numerical data."""
+    return (data - min(data)) / (max(data) - min(data)) if max(data) != min(data) else data
+
+def encode_categorical_data(data):
+    """Encodes categorical data using one-hot encoding or label encoding."""
+    return {category: idx for idx, category in enumerate(set(data))}
+
+def handle_missing_values(data):
+    """Handles missing values by filling with mean/median/mode."""
+    return [x if x is not None else 0 for x in data]  # Example: filling missing values with zero
+
+# Model Architecture (Conceptual Example)
+def build_model():
+    """Defines a simple recommendation model with embeddings."""
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Embedding, Dense, Dropout, Flatten
+    
+    model = Sequential([
+        Embedding(input_dim=1000, output_dim=64, input_length=10),
+        Flatten(),
+        Dense(128, activation='relu'),
+        Dropout(0.5),
+        Dense(64, activation='relu'),
+        Dense(1, activation='sigmoid')
+    ])
+    
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
+# Cold Start Handling
+def cold_start_recommendation(user_id):
+    """Handles recommendations for new users."""
+    if user_id not in known_users:
+        return {"recommendations": ["Trending", "Mood-Based", "Popular Posts"]}
+    return {"recommendations": ["Content-Based Filtering"]}
